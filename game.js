@@ -1,4 +1,5 @@
 const SAVE_KEY = "strongman_forge_save_v1";
+const DEBUG_FLAG = "strongman_debug";
 
 const upgradeDefs = [
   { id: "strength", name: "Strength", desc: "Raise faster with each input.", baseCost: 20, growth: 1.45, unlock: () => true, effect: l => 1 + l * 0.25 },
@@ -24,13 +25,16 @@ const goals = [
 const state = {
   gains: 0, lift: 0.1, gps: 0, zone: "Low", isActive: false, holdInput: false,
   redHold: 0, bestRedHold: 0, combo: 1, totalPlaytime: 0, goalIndex: 0,
-  totalUpgrades: 0, upgrades: {}, lastTick: performance.now(), lastSave: Date.now(), saveTimer: 0
+  totalUpgrades: 0, upgrades: {}, lastTick: performance.now(), lastSave: Date.now(), saveTimer: 0,
+  debug: false, debugTimeScale: 1, debugPassiveLift: null
 };
 
 const el = {};
+let upgradesDirty = true;
 
 function initGame() {
   cacheEls();
+  setupDebugMode();
   loadGame();
   bindInput();
   renderUpgrades();
@@ -38,17 +42,50 @@ function initGame() {
   requestAnimationFrame(loop);
 }
 function cacheEls() { ["gains","gps","liftPercent","zone","mode","bestRed","playtime","indicator","weight","redZone","maxBonus","liftBtn","resetBtn","goalText","goalReward","upgradeList","liftTarget","toastContainer","offlineModal","offlineText","closeOffline"].forEach(id=>el[id]=document.getElementById(id)); }
+
+function setupDebugMode() {
+  const params = new URLSearchParams(window.location.search);
+  state.debug = params.has("debug") || localStorage.getItem(DEBUG_FLAG) === "1";
+  if (state.debug) {
+    localStorage.setItem(DEBUG_FLAG, "1");
+    window.debugGame = {
+      setUpgrade: (id, level) => {
+        if (!(id in state.upgrades)) return;
+        state.upgrades[id] = Math.max(0, Math.floor(level));
+        state.totalUpgrades = Object.values(state.upgrades).reduce((sum, v) => sum + v, 0);
+        upgradesDirty = true;
+      },
+      addGains: amount => { state.gains += Number(amount) || 0; upgradesDirty = true; },
+      setLift: value => { state.lift = Math.max(0, Math.min(1, Number(value) || 0)); },
+      setTimeScale: value => { state.debugTimeScale = Math.max(0.1, Number(value) || 1); },
+      setPassiveLift: value => {
+        if (value == null) state.debugPassiveLift = null;
+        else state.debugPassiveLift = Math.max(0, Math.min(1, Number(value) || 0));
+      },
+      snapshot: () => JSON.parse(JSON.stringify(state))
+    };
+    console.info("Debug mode enabled. window.debugGame helpers are available.");
+  }
+}
+
 function loadGame() {
   const raw = localStorage.getItem(SAVE_KEY);
   upgradeDefs.forEach(u => state.upgrades[u.id] = 0);
   if (!raw) return;
   try {
     const save = JSON.parse(raw);
-    Object.assign(state, save);
+    state.gains = Number(save.gains) || 0;
+    state.lift = clamp01(save.lift ?? state.lift);
+    state.bestRedHold = Math.max(0, Number(save.bestRedHold) || 0);
+    state.totalPlaytime = Math.max(0, Number(save.totalPlaytime) || 0);
+    state.goalIndex = Math.max(0, Math.min(goals.length, Number(save.goalIndex) || 0));
+    for (const def of upgradeDefs) state.upgrades[def.id] = Math.max(0, Math.floor(save.upgrades?.[def.id] || 0));
+    state.totalUpgrades = Object.values(state.upgrades).reduce((sum, v) => sum + v, 0);
     state.lastTick = performance.now();
-    calculateOfflineProgress(save.lastSave || Date.now());
+    calculateOfflineProgress(Number(save.lastSave) || Date.now());
   } catch {}
 }
+
 function saveGame() {
   state.lastSave = Date.now();
   localStorage.setItem(SAVE_KEY, JSON.stringify({
@@ -61,40 +98,72 @@ function resetGame() {
   localStorage.removeItem(SAVE_KEY);
   location.reload();
 }
+
 function bindInput() {
-  const onDown = () => { state.holdInput = true; el.liftBtn.classList.add("active"); };
-  const onUp = () => { state.holdInput = false; el.liftBtn.classList.remove("active"); };
-  ["mousedown","touchstart","pointerdown"].forEach(evt => el.liftBtn.addEventListener(evt, onDown));
-  ["mouseup","mouseleave","touchend","pointerup","pointercancel"].forEach(evt => el.liftBtn.addEventListener(evt, onUp));
-  ["mousedown","touchstart","pointerdown"].forEach(evt => el.liftTarget.addEventListener(evt, () => quickLiftImpulse()));
-  document.addEventListener("keydown", e => { if (e.code === "Space") { e.preventDefault(); state.holdInput = true; } });
-  document.addEventListener("keyup", e => { if (e.code === "Space") state.holdInput = false; });
+  const setHold = value => {
+    state.holdInput = value;
+    el.liftBtn.classList.toggle("active", value);
+  };
+  el.liftBtn.addEventListener("pointerdown", e => {
+    e.preventDefault();
+    setHold(true);
+    el.liftBtn.setPointerCapture?.(e.pointerId);
+  });
+  ["pointerup", "pointercancel", "pointerleave"].forEach(evt => el.liftBtn.addEventListener(evt, () => setHold(false)));
+  el.liftTarget.addEventListener("pointerdown", () => quickLiftImpulse());
+  document.addEventListener("visibilitychange", () => { if (document.hidden) setHold(false); });
+  window.addEventListener("blur", () => setHold(false));
+
+  document.addEventListener("keydown", e => {
+    if (e.code === "Space" && !e.repeat) {
+      e.preventDefault();
+      setHold(true);
+    }
+  });
+  document.addEventListener("keyup", e => { if (e.code === "Space") setHold(false); });
   el.resetBtn.addEventListener("click", resetGame);
   el.closeOffline.addEventListener("click", () => el.offlineModal.classList.add("hidden"));
 }
+
 function quickLiftImpulse() {
   const str = upgradeDefs.find(u=>u.id==="strength").effect(state.upgrades.strength);
-  state.lift = Math.min(1, state.lift + 0.04 * str);
+  state.lift = clamp01(state.lift + 0.04 * str);
   state.isActive = true;
 }
+
+function getPassiveRecoverySpeed() {
+  const grip = upgradeDefs.find(u=>u.id==="grip").effect(state.upgrades.grip);
+  const end = upgradeDefs.find(u=>u.id==="endurance").effect(state.upgrades.endurance);
+  return 0.035 + (grip + end) * 0.04;
+}
+
 function handleLiftInput(dt) {
   const str = upgradeDefs.find(u=>u.id==="strength").effect(state.upgrades.strength);
   const auto = upgradeDefs.find(u=>u.id==="autolifter").effect(state.upgrades.autolifter);
-  const liftingForce = (state.holdInput ? 0.52 * str : 0) + auto;
   const grip = upgradeDefs.find(u=>u.id==="grip").effect(state.upgrades.grip);
   const end = upgradeDefs.find(u=>u.id==="endurance").effect(state.upgrades.endurance);
-  const passiveStable = getPassiveStableLevel(state);
-  let fall = 0.22 * Math.max(0.2, 1 - grip - end);
-  if (!state.holdInput && state.lift < passiveStable) fall *= 0.18;
-  state.lift += (liftingForce - fall) * dt;
-  state.lift = Math.max(0, Math.min(1, state.lift));
+  const passiveStable = state.debugPassiveLift ?? getPassiveStableLevel(state);
+  const fallSpeed = 0.22 * Math.max(0.2, 1 - grip - end);
+
+  if (state.holdInput || auto > 0) {
+    const liftingForce = (state.holdInput ? 0.52 * str : 0) + auto;
+    state.lift += (liftingForce - fallSpeed) * dt;
+  } else if (state.lift > passiveStable) {
+    state.lift = Math.max(passiveStable, state.lift - fallSpeed * dt);
+  } else if (state.lift < passiveStable) {
+    const recover = getPassiveRecoverySpeed();
+    state.lift = Math.min(passiveStable, state.lift + recover * dt);
+  }
+
+  state.lift = clamp01(state.lift);
   state.isActive = state.holdInput || (auto > 0 && state.lift > passiveStable + 0.03);
 }
+
 function getZoneName(lift) { if (lift >= .9) return "Red"; if (lift >= .75) return "High"; if (lift >= .4) return "Mid"; return "Low"; }
 function zoneMultiplier(lift) { if (lift >= .9) return 3; if (lift >= .75) return 1.5; if (lift >= .4) return .75; return .25; }
 function getPassiveStableLevel(s) {
   const sup = upgradeDefs.find(u=>u.id==="support").effect(s.upgrades.support || 0);
-  return Math.min(0.7, sup);
+  return clamp01(Math.min(0.7, sup));
 }
 function calculateIncome(dt, overrideLift = state.lift, forcePassive = false) {
   const zMulti = zoneMultiplier(overrideLift);
@@ -114,6 +183,7 @@ function updateGoals() {
   toast(`Goal complete: ${g.text} (+${formatNumber(g.reward)} Gains)`);
   floatText(`+${formatNumber(g.reward)} Gains`);
   state.goalIndex++;
+  upgradesDirty = true;
 }
 function buyUpgrade(id) {
   const def = upgradeDefs.find(u => u.id === id);
@@ -124,8 +194,8 @@ function buyUpgrade(id) {
   state.gains -= cost;
   state.upgrades[id] = level + 1;
   state.totalUpgrades++;
+  upgradesDirty = true;
   saveGame();
-  renderUpgrades();
 }
 function getUpgradeCost(def, level) { return Math.floor(def.baseCost * Math.pow(def.growth, level)); }
 function renderUpgrades() {
@@ -141,6 +211,7 @@ function renderUpgrades() {
     card.querySelector("button").addEventListener("click", () => buyUpgrade(def.id));
     el.upgradeList.appendChild(card);
   });
+  upgradesDirty = false;
 }
 function updateGame(dt) {
   state.totalPlaytime += dt;
@@ -154,6 +225,7 @@ function updateGame(dt) {
       const bonus = 8 * state.combo;
       state.gains += bonus;
       floatText(`+${formatNumber(bonus)} combo`);
+      upgradesDirty = true;
     }
   } else {
     state.redHold = 0;
@@ -163,6 +235,7 @@ function updateGame(dt) {
   updateGoals();
   state.saveTimer += dt;
   if (state.saveTimer >= 5) { saveGame(); state.saveTimer = 0; }
+  if (upgradesDirty) renderUpgrades();
 }
 function render() {
   el.gains.textContent = formatNumber(state.gains);
@@ -180,18 +253,20 @@ function render() {
   const goal = goals[state.goalIndex];
   el.goalText.textContent = goal ? goal.text : "All goals complete. Keep forging!";
   el.goalReward.textContent = goal ? `Reward: ${formatNumber(goal.reward)} Gains` : "";
-  renderUpgrades();
 }
 function calculateOfflineProgress(lastSaveTs) {
   const now = Date.now();
+  if (!Number.isFinite(lastSaveTs) || lastSaveTs > now) return;
   const sec = Math.min(8 * 3600, Math.max(0, (now - lastSaveTs) / 1000));
   if (sec < 2) return;
-  const stable = getPassiveStableLevel(state);
+  const stable = state.debugPassiveLift ?? getPassiveStableLevel(state);
   const gains = calculateIncome(sec, stable, true);
   state.gains += gains;
   el.offlineText.textContent = `While you were away (${formatTime(sec)}), your trainee kept holding the weight at ${Math.round(stable * 100)}% and earned ${formatNumber(gains)} Gains.`;
   el.offlineModal.classList.remove("hidden");
+  upgradesDirty = true;
 }
+function clamp01(v) { return Math.max(0, Math.min(1, Number(v) || 0)); }
 function formatNumber(n) {
   if (n < 1000) return n.toFixed(1);
   if (n < 1e6) return `${(n/1e3).toFixed(1)}K`;
@@ -204,6 +279,13 @@ function formatTime(sec) {
 }
 function toast(msg) { const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; el.toastContainer.appendChild(t); setTimeout(() => t.remove(), 3500); }
 function floatText(msg) { const f = document.createElement("div"); f.className = "float"; f.textContent = msg; f.style.left = `${40 + Math.random()*30}%`; f.style.top = `${55 + Math.random()*20}%`; el.liftTarget.appendChild(f); setTimeout(() => f.remove(), 950); }
-function loop(ts) { const dt = Math.min(0.05, (ts - state.lastTick) / 1000); state.lastTick = ts; updateGame(dt); render(); requestAnimationFrame(loop); }
+function loop(ts) {
+  const delta = Math.min(0.05, (ts - state.lastTick) / 1000);
+  state.lastTick = ts;
+  const dt = delta * (state.debug ? state.debugTimeScale : 1);
+  updateGame(dt);
+  render();
+  requestAnimationFrame(loop);
+}
 
 initGame();
