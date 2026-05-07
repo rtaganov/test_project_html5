@@ -45,8 +45,6 @@ body {
 .max-bonus.show{ display:block; animation: pulse .4s infinite alternate; }
 .controls { grid-column: 1 / span 2; display:flex; gap:10px; }
 button { border:none; border-radius:10px; padding:10px 14px; font-weight:700; cursor:pointer; }
-.lift-btn { flex:1; background:linear-gradient(180deg,#efb24d,#b1721a); color:#231402; }
-.lift-btn.active { transform: translateY(1px) scale(.99); filter: brightness(1.1); }
 .reset-btn { background:#3f455f; color:#fff; }
 .side-panel { display:flex; flex-direction:column; gap:12px; }
 .panel { padding:12px; }
