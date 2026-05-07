@@ -47,7 +47,7 @@ function initGame() {
   render();
   requestAnimationFrame(loop);
 }
-function cacheEls() { ["gains","gps","liftPercent","zone","mode","bestRed","playtime","indicator","weight","redZone","maxBonus","resetBtn","goalText","goalReward","upgradeList","liftTarget","toastContainer","offlineModal","offlineText","closeOffline"].forEach(id=>el[id]=document.getElementById(id)); }
+function cacheEls() { ["gains","gps","liftPercent","zone","bestRed","playtime","indicator","weight","redZone","maxBonus","resetBtn","goalText","goalReward","upgradeList","arena","liftTarget","toastContainer","offlineModal","offlineText","closeOffline"].forEach(id=>el[id]=document.getElementById(id)); }
 
 function setupDebugMode() {
   const params = new URLSearchParams(window.location.search);
@@ -275,18 +275,35 @@ function updateGame(dt) {
   }
 }
 function render() {
+  const passiveStable = state.debugPassiveLift ?? getPassiveStableLevel(state);
+  const isLifting = state.holdInput;
+  const isFalling = !isLifting && state.lift > passiveStable + 0.01;
+  const isStable = !isLifting && Math.abs(state.lift - passiveStable) <= 0.01;
+  const isRedZone = state.lift >= .9;
+
   el.gains.textContent = formatNumber(state.gains);
   el.gps.textContent = formatNumber(state.gps);
   el.liftPercent.textContent = `${Math.round(state.lift * 100)}%`;
   el.zone.textContent = state.zone;
-  el.mode.textContent = state.holdInput ? "Active" : "Passive";
   el.bestRed.textContent = `${state.bestRedHold.toFixed(1)}s`;
   el.playtime.textContent = formatTime(state.totalPlaytime);
   el.indicator.style.bottom = `${state.lift * 100}%`;
   el.weight.style.top = `${55 - state.lift * 40}%`;
-  el.redZone.classList.toggle("glow", state.lift >= .9);
-  el.maxBonus.classList.toggle("show", state.lift >= .9);
-  el.weight.classList.toggle("red-pulse", state.lift >= .9);
+  el.redZone.classList.toggle("glow", isRedZone);
+  el.maxBonus.classList.toggle("show", isRedZone);
+  el.weight.classList.toggle("red-pulse", isRedZone);
+  el.liftTarget.classList.toggle("is-lifting", isLifting);
+  el.liftTarget.classList.toggle("is-falling", isFalling);
+  el.liftTarget.classList.toggle("is-stable", isStable);
+  el.liftTarget.classList.toggle("is-red-zone", isRedZone);
+  el.weight.classList.toggle("is-lifting", isLifting);
+  el.weight.classList.toggle("is-falling", isFalling);
+  el.weight.classList.toggle("is-stable", isStable);
+  el.weight.classList.toggle("is-red-zone", isRedZone);
+  el.arena.classList.toggle("is-lifting", isLifting);
+  el.arena.classList.toggle("is-falling", isFalling);
+  el.arena.classList.toggle("is-stable", isStable);
+  el.arena.classList.toggle("is-red-zone", isRedZone);
   const goal = goals[state.goalIndex];
   el.goalText.textContent = goal ? goal.text : "All goals complete. Keep forging!";
   el.goalReward.textContent = goal ? `Reward: ${formatNumber(goal.reward)} Gains` : "";
