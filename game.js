@@ -28,8 +28,10 @@ const goals = [
   { text: "Reach 10,000 Gains", done: s => s.gains >= 10000, reward: 5000 }
 ];
 
+const CLICK_COOLDOWN_MS = 80;
+
 const state = {
-  gains: 0, lift: 0.1, gps: 0, zone: "Low", isActive: false, holdInput: false,
+  gains: 0, lift: 0.1, gps: 0, zone: "Low", isActive: false, recentManualInputTimer: 0, lastLiftClickAt: -Infinity,
   redHold: 0, bestRedHold: 0, combo: 1, totalPlaytime: 0, goalIndex: 0,
   totalUpgrades: 0, upgrades: {}, lastTick: performance.now(), lastSave: Date.now(), saveTimer: 0,
   debug: false, debugTimeScale: 1, debugPassiveLift: null
@@ -121,22 +123,18 @@ function resetGame() {
 }
 
 function bindInput() {
-  const startHold = e => {
+  const onLiftPointerDown = e => {
     e.preventDefault();
-    state.holdInput = true;
+    const now = performance.now();
+    if (now - state.lastLiftClickAt < CLICK_COOLDOWN_MS) return;
+    state.lastLiftClickAt = now;
+    state.recentManualInputTimer = 0.35;
     quickLiftImpulse();
-    el.liftTarget.setPointerCapture?.(e.pointerId);
   };
 
-  const stopHold = e => {
-    if (e && typeof e.pointerId === "number") el.liftTarget.releasePointerCapture?.(e.pointerId);
-    state.holdInput = false;
-  };
-
-  el.liftTarget.addEventListener("pointerdown", startHold);
-  ["pointerup", "pointercancel", "pointerleave"].forEach(evt => el.liftTarget.addEventListener(evt, stopHold));
-  document.addEventListener("visibilitychange", () => { if (document.hidden) state.holdInput = false; });
-  window.addEventListener("blur", () => { state.holdInput = false; });
+  el.liftTarget.addEventListener("pointerdown", onLiftPointerDown);
+  document.addEventListener("visibilitychange", () => { if (document.hidden) state.recentManualInputTimer = 0; });
+  window.addEventListener("blur", () => { state.recentManualInputTimer = 0; });
 
   el.resetBtn.addEventListener("click", resetGame);
   el.closeOffline.addEventListener("click", () => el.offlineModal.classList.add("hidden"));
@@ -156,16 +154,14 @@ function getPassiveRecoverySpeed() {
 }
 
 function handleLiftInput(dt) {
-  const str = upgradeDefs.find(u=>u.id==="strength").effect(state.upgrades.strength);
   const auto = upgradeDefs.find(u=>u.id==="autolifter").effect(state.upgrades.autolifter);
   const grip = upgradeDefs.find(u=>u.id==="grip").effect(state.upgrades.grip);
   const end = upgradeDefs.find(u=>u.id==="endurance").effect(state.upgrades.endurance);
   const passiveStable = state.debugPassiveLift ?? getPassiveStableLevel(state);
   const fallSpeed = 0.22 * Math.max(0.2, 1 - grip - end);
 
-  if (state.holdInput || auto > 0) {
-    const liftingForce = (state.holdInput ? 0.52 * str : 0) + auto;
-    state.lift += (liftingForce - fallSpeed) * dt;
+  if (auto > 0) {
+    state.lift += (auto - fallSpeed) * dt;
   } else if (state.lift > passiveStable) {
     state.lift = Math.max(passiveStable, state.lift - fallSpeed * dt);
   } else if (state.lift < passiveStable) {
@@ -174,7 +170,7 @@ function handleLiftInput(dt) {
   }
 
   state.lift = clamp01(state.lift);
-  state.isActive = state.holdInput || (auto > 0 && state.lift > passiveStable + 0.03);
+  state.isActive = state.recentManualInputTimer > 0 || (auto > 0 && state.lift > passiveStable + 0.03);
 }
 
 function getZoneName(lift) { if (lift >= .9) return "Red"; if (lift >= .75) return "High"; if (lift >= .4) return "Mid"; return "Low"; }
@@ -185,7 +181,8 @@ function getPassiveStableLevel(s) {
 }
 function calculateIncome(dt, overrideLift = state.lift, forcePassive = false) {
   const zMulti = zoneMultiplier(overrideLift);
-  const activeMul = forcePassive ? 0.5 : (state.holdInput ? 1.5 : 0.5);
+  const manualActive = state.recentManualInputTimer > 0;
+  const activeMul = forcePassive ? 0.5 : (manualActive ? 1.5 : 0.5);
   const global = upgradeDefs.find(u=>u.id==="enchanted").effect(state.upgrades.enchanted);
   const passiveBonus = forcePassive ? upgradeDefs.find(u=>u.id==="partner").effect(state.upgrades.partner) : 1;
   let comboBonus = 1;
@@ -256,6 +253,7 @@ function updateUpgradeButtonStates() {
 }
 function updateGame(dt) {
   state.totalPlaytime += dt;
+  state.recentManualInputTimer = Math.max(0, state.recentManualInputTimer - dt);
   handleLiftInput(dt);
   state.zone = getZoneName(state.lift);
   if (state.lift >= .9) {
@@ -290,7 +288,7 @@ function updateGame(dt) {
 }
 function render() {
   const passiveStable = state.debugPassiveLift ?? getPassiveStableLevel(state);
-  const isLifting = state.holdInput;
+  const isLifting = state.recentManualInputTimer > 0;
   const isFalling = !isLifting && state.lift > passiveStable + 0.01;
   const isStable = !isLifting && Math.abs(state.lift - passiveStable) <= 0.01;
   const isRedZone = state.lift >= .9;
