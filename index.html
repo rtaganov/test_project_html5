@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Strongman Forge Trainer</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="hud">
+      <div class="hud-card"><span>Gains</span><strong id="gains">0</strong></div>
+      <div class="hud-card"><span>Gains/sec</span><strong id="gps">0</strong></div>
+      <div class="hud-card"><span>Lift</span><strong id="liftPercent">0%</strong></div>
+      <div class="hud-card"><span>Zone</span><strong id="zone">Low</strong></div>
+      <div class="hud-card"><span>Status</span><strong id="mode">Passive</strong></div>
+      <div class="hud-card"><span>Best Red Hold</span><strong id="bestRed">0.0s</strong></div>
+      <div class="hud-card"><span>Total Training</span><strong id="playtime">0:00</strong></div>
+    </header>
+
+    <main class="layout">
+      <section class="arena">
+        <div class="meter-wrap">
+          <div class="meter" id="meter">
+            <div class="zone z-low"></div>
+            <div class="zone z-mid"></div>
+            <div class="zone z-high"></div>
+            <div class="zone z-red" id="redZone"></div>
+            <div class="indicator" id="indicator"></div>
+          </div>
+          <div class="meter-labels">
+            <span>100%</span><span>75%</span><span>50%</span><span>25%</span><span>0%</span>
+          </div>
+        </div>
+
+        <div class="forge" id="liftTarget" tabindex="0" aria-label="Lift area">
+          <div class="max-bonus" id="maxBonus">MAX BONUS</div>
+          <div class="weight" id="weight">⚙️</div>
+          <div class="barbell"></div>
+          <div class="silhouette">🧌</div>
+          <div class="ground"></div>
+        </div>
+
+        <div class="controls">
+          <button id="liftBtn" class="lift-btn">Hold to Lift (Space)</button>
+          <button id="resetBtn" class="reset-btn">Reset Progress</button>
+        </div>
+      </section>
+
+      <aside class="side-panel">
+        <section class="panel goals">
+          <h2>Current Goal</h2>
+          <div id="goalText">Loading...</div>
+          <div id="goalReward"></div>
+        </section>
+
+        <section class="panel upgrades">
+          <h2>Upgrades</h2>
+          <div id="upgradeList"></div>
+        </section>
+      </aside>
+    </main>
+  </div>
+
+  <div id="toastContainer" class="toast-container"></div>
+
+  <div id="offlineModal" class="modal hidden">
+    <div class="modal-content">
+      <h3>Welcome back, Trainer!</h3>
+      <p id="offlineText"></p>
+      <button id="closeOffline">Back to Forge</button>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
