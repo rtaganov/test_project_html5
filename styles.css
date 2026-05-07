@@ -12,6 +12,8 @@ body {
   font-family: Inter, Segoe UI, Arial, sans-serif;
   color: var(--text);
   background: radial-gradient(circle at 20% 20%, #2a2e4e, #0f1120 70%);
+  touch-action: none;
+  user-select: none;
 }
 .app { padding: 12px; max-width: 1300px; margin: 0 auto; }
 .hud { display: grid; grid-template-columns: repeat(auto-fit,minmax(130px,1fr)); gap: 8px; margin-bottom: 12px; }
