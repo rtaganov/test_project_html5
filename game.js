@@ -117,10 +117,20 @@ function bindInput() {
     setHold(true);
     el.liftBtn.setPointerCapture?.(e.pointerId);
   });
-  ["pointerup", "pointercancel", "pointerleave"].forEach(evt => el.liftBtn.addEventListener(evt, () => setHold(false)));
-  el.liftTarget.addEventListener("pointerdown", () => quickLiftImpulse());
+  const releaseHold = e => {
+    if (e && typeof e.pointerId === "number") el.liftBtn.releasePointerCapture?.(e.pointerId);
+    setHold(false);
+  };
+  ["pointerup", "pointercancel", "pointerleave"].forEach(evt => el.liftBtn.addEventListener(evt, releaseHold));
+  el.liftTarget.addEventListener("pointerdown", e => {
+    e.preventDefault();
+    quickLiftImpulse();
+  });
   document.addEventListener("visibilitychange", () => { if (document.hidden) setHold(false); });
-  window.addEventListener("blur", () => setHold(false));
+  window.addEventListener("blur", () => {
+    state.holdInput = false;
+    el.liftBtn.classList.remove("active");
+  });
 
   document.addEventListener("keydown", e => {
     if (e.code === "Space" && !e.repeat) {
