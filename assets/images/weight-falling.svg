@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180" role="img" aria-label="Falling barbell weight with downward emphasis">
+  <defs>
+    <linearGradient id="plate" x1="0" x2="1">
+      <stop offset="0" stop-color="#5f6674"/>
+      <stop offset="1" stop-color="#8e98a8"/>
+    </linearGradient>
+    <linearGradient id="bar" x1="0" x2="1">
+      <stop offset="0" stop-color="#c4cbd6"/>
+      <stop offset="1" stop-color="#a2abba"/>
+    </linearGradient>
+  </defs>
+  <rect x="35" y="82" width="170" height="16" rx="8" fill="url(#bar)"/>
+  <rect x="18" y="58" width="34" height="64" rx="8" fill="url(#plate)"/>
+  <rect x="48" y="64" width="24" height="52" rx="6" fill="#768093"/>
+  <rect x="168" y="64" width="24" height="52" rx="6" fill="#768093"/>
+  <rect x="188" y="58" width="34" height="64" rx="8" fill="url(#plate)"/>
+  <path d="M74 125 v24" stroke="#8ea6c5" stroke-width="6" stroke-linecap="round"/>
+  <path d="M120 125 v30" stroke="#7f9cc0" stroke-width="7" stroke-linecap="round"/>
+  <path d="M166 125 v24" stroke="#8ea6c5" stroke-width="6" stroke-linecap="round"/>
+</svg>

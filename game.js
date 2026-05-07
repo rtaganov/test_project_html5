@@ -3,7 +3,9 @@ const DEBUG_FLAG = "strongman_debug";
 
 const ASSETS = {
   character: "assets/images/character-placeholder.svg",
-  weight: "assets/images/weight-placeholder.svg",
+  weightIdle: "assets/images/weight-idle.svg",
+  weightLifting: "assets/images/weight-lifting.svg",
+  weightFalling: "assets/images/weight-falling.svg",
   background: "assets/images/background-placeholder.svg"
 };
 
@@ -59,7 +61,7 @@ function initGame() {
 function cacheEls() { ["gains","gps","liftPercent","zone","bestRed","playtime","indicator","weight","character","redZone","maxBonus","resetBtn","goalText","goalReward","upgradeList","arena","liftTarget","toastContainer","offlineModal","offlineText","closeOffline"].forEach(id=>el[id]=document.getElementById(id)); }
 
 function applyAssets() {
-  if (el.weight) el.weight.src = ASSETS.weight;
+  if (el.weight) el.weight.src = ASSETS.weightIdle;
   if (el.character) el.character.src = ASSETS.character;
   document.body.style.backgroundImage = `url("${ASSETS.background}")`;
 }
@@ -292,6 +294,11 @@ function render() {
   const isFalling = !isLifting && state.lift > passiveStable + 0.01;
   const isStable = !isLifting && Math.abs(state.lift - passiveStable) <= 0.01;
   const isRedZone = state.lift >= .9;
+
+  const weightSrc = isLifting
+    ? ASSETS.weightLifting
+    : (isFalling ? ASSETS.weightFalling : ASSETS.weightIdle);
+  if (el.weight.getAttribute("src") !== weightSrc) el.weight.src = weightSrc;
 
   el.gains.textContent = formatNumber(state.gains);
   el.gps.textContent = formatNumber(state.gps);
