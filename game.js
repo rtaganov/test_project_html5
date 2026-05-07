@@ -31,13 +31,19 @@ const state = {
 
 const el = {};
 let upgradesDirty = true;
+let upgradeStateDirty = true;
+let upgradeUiTimer = 0;
+const UPGRADE_UI_UPDATE_INTERVAL = 0.35;
+const upgradeButtons = {};
+let lastUnlockedUpgradeIds = "";
 
 function initGame() {
   cacheEls();
   setupDebugMode();
   loadGame();
   bindInput();
-  renderUpgrades();
+  renderUpgradesFull();
+  updateUpgradeButtonStates();
   render();
   requestAnimationFrame(loop);
 }
@@ -54,6 +60,7 @@ function setupDebugMode() {
         state.upgrades[id] = Math.max(0, Math.floor(level));
         state.totalUpgrades = Object.values(state.upgrades).reduce((sum, v) => sum + v, 0);
         upgradesDirty = true;
+        upgradeStateDirty = true;
       },
       addGains: amount => { state.gains += Number(amount) || 0; upgradesDirty = true; },
       setLift: value => { state.lift = Math.max(0, Math.min(1, Number(value) || 0)); },
@@ -83,6 +90,7 @@ function loadGame() {
     state.totalUpgrades = Object.values(state.upgrades).reduce((sum, v) => sum + v, 0);
     state.lastTick = performance.now();
     calculateOfflineProgress(Number(save.lastSave) || Date.now());
+    upgradeStateDirty = true;
   } catch {}
 }
 
@@ -184,6 +192,7 @@ function updateGoals() {
   floatText(`+${formatNumber(g.reward)} Gains`);
   state.goalIndex++;
   upgradesDirty = true;
+  upgradeStateDirty = true;
 }
 function buyUpgrade(id) {
   const def = upgradeDefs.find(u => u.id === id);
@@ -195,21 +204,42 @@ function buyUpgrade(id) {
   state.upgrades[id] = level + 1;
   state.totalUpgrades++;
   upgradesDirty = true;
+  upgradeStateDirty = true;
   saveGame();
 }
 function getUpgradeCost(def, level) { return Math.floor(def.baseCost * Math.pow(def.growth, level)); }
-function renderUpgrades() {
+function getUnlockedUpgradeIds() {
+  return upgradeDefs.filter(def => def.unlock(state)).map(def => def.id).join("|");
+}
+function renderUpgradesFull() {
   el.upgradeList.innerHTML = "";
   upgradeDefs.forEach(def => {
-    const lvl = state.upgrades[def.id] || 0;
-    const cost = getUpgradeCost(def, lvl);
     const unlocked = def.unlock(state);
     const card = document.createElement("div");
     card.className = `upgrade ${unlocked ? "" : "locked"}`;
     const lockText = unlocked ? "" : `<small>🔒 Unlock condition not met</small>`;
-    card.innerHTML = `<h3>${def.name}</h3><small>${def.desc}</small><small>Level: ${lvl}</small><small>Effect: ${def.effect(lvl).toFixed(2)}</small><small>Cost: ${formatNumber(cost)} Gains</small>${lockText}<button ${(!unlocked || state.gains < cost) ? "disabled" : ""}>Buy</button>`;
-    card.querySelector("button").addEventListener("click", () => buyUpgrade(def.id));
+    card.innerHTML = `<h3>${def.name}</h3><small>${def.desc}</small><small data-upgrade-level>Level: 0</small><small data-upgrade-effect>Effect: 0.00</small><small data-upgrade-cost>Cost: 0.0 Gains</small>${lockText}<button data-upgrade-buy>Buy</button>`;
+    const btn = card.querySelector("[data-upgrade-buy]");
+    btn.addEventListener("click", () => buyUpgrade(def.id));
+    upgradeButtons[def.id] = { card, btn };
     el.upgradeList.appendChild(card);
+  });
+  lastUnlockedUpgradeIds = getUnlockedUpgradeIds();
+  updateUpgradeButtonStates();
+  upgradeStateDirty = false;
+}
+function updateUpgradeButtonStates() {
+  upgradeDefs.forEach(def => {
+    const refs = upgradeButtons[def.id];
+    if (!refs) return;
+    const lvl = state.upgrades[def.id] || 0;
+    const cost = getUpgradeCost(def, lvl);
+    const unlocked = def.unlock(state);
+    refs.card.classList.toggle("locked", !unlocked);
+    refs.card.querySelector("[data-upgrade-level]").textContent = `Level: ${lvl}`;
+    refs.card.querySelector("[data-upgrade-effect]").textContent = `Effect: ${def.effect(lvl).toFixed(2)}`;
+    refs.card.querySelector("[data-upgrade-cost]").textContent = `Cost: ${formatNumber(cost)} Gains`;
+    refs.btn.disabled = !unlocked || state.gains < cost;
   });
   upgradesDirty = false;
 }
@@ -235,7 +265,17 @@ function updateGame(dt) {
   updateGoals();
   state.saveTimer += dt;
   if (state.saveTimer >= 5) { saveGame(); state.saveTimer = 0; }
-  if (upgradesDirty) renderUpgrades();
+  const unlockedIds = getUnlockedUpgradeIds();
+  if (unlockedIds !== lastUnlockedUpgradeIds) {
+    lastUnlockedUpgradeIds = unlockedIds;
+    upgradeStateDirty = true;
+  }
+  if (upgradeStateDirty) renderUpgradesFull();
+  upgradeUiTimer += dt;
+  if (upgradesDirty || upgradeUiTimer >= UPGRADE_UI_UPDATE_INTERVAL) {
+    updateUpgradeButtonStates();
+    upgradeUiTimer = 0;
+  }
 }
 function render() {
   el.gains.textContent = formatNumber(state.gains);
@@ -265,6 +305,7 @@ function calculateOfflineProgress(lastSaveTs) {
   el.offlineText.textContent = `While you were away (${formatTime(sec)}), your trainee kept holding the weight at ${Math.round(stable * 100)}% and earned ${formatNumber(gains)} Gains.`;
   el.offlineModal.classList.remove("hidden");
   upgradesDirty = true;
+  upgradeStateDirty = true;
 }
 function clamp01(v) { return Math.max(0, Math.min(1, Number(v) || 0)); }
 function formatNumber(n) {
