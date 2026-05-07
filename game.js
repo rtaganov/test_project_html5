@@ -47,7 +47,7 @@ function initGame() {
   render();
   requestAnimationFrame(loop);
 }
-function cacheEls() { ["gains","gps","liftPercent","zone","mode","bestRed","playtime","indicator","weight","redZone","maxBonus","liftBtn","resetBtn","goalText","goalReward","upgradeList","liftTarget","toastContainer","offlineModal","offlineText","closeOffline"].forEach(id=>el[id]=document.getElementById(id)); }
+function cacheEls() { ["gains","gps","liftPercent","zone","mode","bestRed","playtime","indicator","weight","redZone","maxBonus","resetBtn","goalText","goalReward","upgradeList","liftTarget","toastContainer","offlineModal","offlineText","closeOffline"].forEach(id=>el[id]=document.getElementById(id)); }
 
 function setupDebugMode() {
   const params = new URLSearchParams(window.location.search);
@@ -108,40 +108,27 @@ function resetGame() {
 }
 
 function bindInput() {
-  const setHold = value => {
-    state.holdInput = value;
-    el.liftBtn.classList.toggle("active", value);
-  };
-  el.liftBtn.addEventListener("pointerdown", e => {
+  const startHold = e => {
     e.preventDefault();
-    setHold(true);
-    el.liftBtn.setPointerCapture?.(e.pointerId);
-  });
-  const releaseHold = e => {
-    if (e && typeof e.pointerId === "number") el.liftBtn.releasePointerCapture?.(e.pointerId);
-    setHold(false);
-  };
-  ["pointerup", "pointercancel", "pointerleave"].forEach(evt => el.liftBtn.addEventListener(evt, releaseHold));
-  el.liftTarget.addEventListener("pointerdown", e => {
-    e.preventDefault();
+    state.holdInput = true;
     quickLiftImpulse();
-  });
-  document.addEventListener("visibilitychange", () => { if (document.hidden) setHold(false); });
-  window.addEventListener("blur", () => {
-    state.holdInput = false;
-    el.liftBtn.classList.remove("active");
-  });
+    el.liftTarget.setPointerCapture?.(e.pointerId);
+  };
 
-  document.addEventListener("keydown", e => {
-    if (e.code === "Space" && !e.repeat) {
-      e.preventDefault();
-      setHold(true);
-    }
-  });
-  document.addEventListener("keyup", e => { if (e.code === "Space") setHold(false); });
+  const stopHold = e => {
+    if (e && typeof e.pointerId === "number") el.liftTarget.releasePointerCapture?.(e.pointerId);
+    state.holdInput = false;
+  };
+
+  el.liftTarget.addEventListener("pointerdown", startHold);
+  ["pointerup", "pointercancel", "pointerleave"].forEach(evt => el.liftTarget.addEventListener(evt, stopHold));
+  document.addEventListener("visibilitychange", () => { if (document.hidden) state.holdInput = false; });
+  window.addEventListener("blur", () => { state.holdInput = false; });
+
   el.resetBtn.addEventListener("click", resetGame);
   el.closeOffline.addEventListener("click", () => el.offlineModal.classList.add("hidden"));
 }
+
 
 function quickLiftImpulse() {
   const str = upgradeDefs.find(u=>u.id==="strength").effect(state.upgrades.strength);
