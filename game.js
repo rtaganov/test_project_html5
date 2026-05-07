@@ -1,6 +1,12 @@
 const SAVE_KEY = "strongman_forge_save_v1";
 const DEBUG_FLAG = "strongman_debug";
 
+const ASSETS = {
+  character: "assets/images/character-placeholder.svg",
+  weight: "assets/images/weight-placeholder.svg",
+  background: "assets/images/background-placeholder.svg"
+};
+
 const upgradeDefs = [
   { id: "strength", name: "Strength", desc: "Raise faster with each input.", baseCost: 20, growth: 1.45, unlock: () => true, effect: l => 1 + l * 0.25 },
   { id: "grip", name: "Grip", desc: "Slows natural falling speed.", baseCost: 30, growth: 1.5, unlock: s => s.gains >= 20, effect: l => l * 0.06 },
@@ -41,13 +47,20 @@ function initGame() {
   cacheEls();
   setupDebugMode();
   loadGame();
+  applyAssets();
   bindInput();
   renderUpgradesFull();
   updateUpgradeButtonStates();
   render();
   requestAnimationFrame(loop);
 }
-function cacheEls() { ["gains","gps","liftPercent","zone","bestRed","playtime","indicator","weight","redZone","maxBonus","resetBtn","goalText","goalReward","upgradeList","arena","liftTarget","toastContainer","offlineModal","offlineText","closeOffline"].forEach(id=>el[id]=document.getElementById(id)); }
+function cacheEls() { ["gains","gps","liftPercent","zone","bestRed","playtime","indicator","weight","character","redZone","maxBonus","resetBtn","goalText","goalReward","upgradeList","arena","liftTarget","toastContainer","offlineModal","offlineText","closeOffline"].forEach(id=>el[id]=document.getElementById(id)); }
+
+function applyAssets() {
+  if (el.weight) el.weight.src = ASSETS.weight;
+  if (el.character) el.character.src = ASSETS.character;
+  document.body.style.backgroundImage = `url("${ASSETS.background}")`;
+}
 
 function setupDebugMode() {
   const params = new URLSearchParams(window.location.search);
@@ -190,6 +203,7 @@ function updateGoals() {
   state.goalIndex++;
   upgradesDirty = true;
   upgradeStateDirty = true;
+  saveGame();
 }
 function buyUpgrade(id) {
   const def = upgradeDefs.find(u => u.id === id);
@@ -320,6 +334,7 @@ function calculateOfflineProgress(lastSaveTs) {
   el.offlineModal.classList.remove("hidden");
   upgradesDirty = true;
   upgradeStateDirty = true;
+  saveGame();
 }
 function clamp01(v) { return Math.max(0, Math.min(1, Number(v) || 0)); }
 function formatNumber(n) {

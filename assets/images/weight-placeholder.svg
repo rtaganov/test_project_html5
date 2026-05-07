@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Weight placeholder">
+  <rect width="256" height="256" rx="24" fill="#1d1f2f"/>
+  <circle cx="128" cy="128" r="82" fill="#a4adc8"/>
+  <circle cx="128" cy="128" r="56" fill="#6e7699"/>
+  <circle cx="128" cy="128" r="20" fill="#30364f"/>
+  <rect x="44" y="112" width="28" height="32" rx="10" fill="#a4adc8"/>
+  <rect x="184" y="112" width="28" height="32" rx="10" fill="#a4adc8"/>
+</svg>
